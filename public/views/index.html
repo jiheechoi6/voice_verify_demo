@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+
+    <title>Speaker Recognition Demo</title>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-warning mb-5 pt-2 pb-1">
+        <div class="container">
+            <h2>음성인증 데모</h2>
+        </div>
+    </nav>
+
+    <div class="container mb-5">
+        <div class="btn-group" >
+            <button id="toggle-enrol" type="button" class="btn btn-secondary">음성 등록</button>
+            <button id="toggle-verify" type="button" class="btn btn-secondary">음성 인증</button>
+        </div>
+    </div>
+
+    <div id="enroll-box" class="container d-block">
+        <h3>등록</h3>
+        <form class="form-inline mb-4">
+            <div id='id-form' class='form-group row'>
+                    <label class="col-sm-2 col-form-label">아이디 입력:</label>
+                <div class="col-sm-4">
+                    <input required type=text class="form-control" id="inputusername" placeholder="Enter your username"> 
+                    <small id="id-warning" class="text-danger">test</small> <br>
+                </div>
+            </div>
+            <br>
+            <div id="progress-bar" class="progress" style="width: 350px; height: 8px">
+                <div
+                  class="progress-bar bg-success"
+                  role="progressbar"
+                  style="width: 45%;"
+                ></div>
+            </div>
+            <small id="seconds-left-enrol" class="text-info">[] Seconds left</small> <br>
+            <br>
+            <button type="submit" id="enrol-button" class="btn btn-warning">등록 시작</button>
+            <button id="cancel-enrol-button" class="btn btn-danger d-none">등록 취소</button> <br>
+        </form>
+    </div>
+
+    <div id="verify-box" class="container d-none">
+        <h3>인증</h3>
+        <form class="form-inline mb-4">
+            <div id='id-form' class='form-group row'>
+                <label class="col-sm-2 col-form-label">아이디 입력:</label>
+                <div class="col-sm-4">
+                    <input type=text class="form-control" id="input-id" placeholder="Enter your username"> 
+                    <small id="id-warning" class="text-danger">test</small> <br>
+                </div>
+            </div>
+            <br>
+            <button type="submit" class="btn btn-warning">인증 시작</button>
+            <button type="submit" class="btn btn-danger">인증 종료</button> <br>
+            <small id="seconds-left-verify" class="text-danger">Seconds</small> <br>
+        </form>
+        <br>
+        <div class="card col-sm-5 bg-light">
+            <div class="card-body">
+                <h1>결괏값</h1>
+            </div>
+          </div>
+    </div>
+    
+    <script type="module" src="../controller.js"></script>
+</body>
+</html>
