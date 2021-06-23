@@ -17,7 +17,7 @@
 
     <div class="container mb-5">
         <div class="btn-group" >
-            <button id="toggle-enrol" type="button" class="btn btn-secondary">음성 등록</button>
+            <button id="toggle-enrol" type="button" class="btn btn-secondary active">음성 등록</button>
             <button id="toggle-verify" type="button" class="btn btn-secondary">음성 인증</button>
         </div>
     </div>
@@ -28,21 +28,22 @@
             <div id='id-form' class='form-group row'>
                     <label class="col-sm-2 col-form-label">아이디 입력:</label>
                 <div class="col-sm-4">
-                    <input required type=text class="form-control" id="inputusername" placeholder="Enter your username"> 
-                    <small id="id-warning" class="text-danger">test</small> <br>
+                    <input required type=text class="form-control" id="inputusername" name="username"" placeholder="아이디를 입력해주세요"> 
+                    <small id="id-duplicate-warning" class="text-danger"></small> <br>
                 </div>
             </div>
             <br>
-            <div id="progress-bar" class="progress" style="width: 350px; height: 8px">
+            <div class="progress" style="width: 350px; height: 8px">
                 <div
-                  class="progress-bar bg-success"
-                  role="progressbar"
-                  style="width: 45%;"
+                    id="enrol-progress-bar"
+                    class="progress-bar bg-success"
+                    role="progressbar"
+                    style="width: 0%;"
                 ></div>
             </div>
-            <small id="seconds-left-enrol" class="text-info">[] Seconds left</small> <br>
+            <small id="seconds-left-enrol" class="text-info"></small> <br>
             <br>
-            <button type="submit" id="enrol-button" class="btn btn-warning">등록 시작</button>
+            <button type="button" id="enrol-button" class="btn btn-warning">등록 시작</button>
             <button id="cancel-enrol-button" class="btn btn-danger d-none">등록 취소</button> <br>
         </form>
     </div>
@@ -58,16 +59,17 @@
                 </div>
             </div>
             <br>
-            <button type="submit" class="btn btn-warning">인증 시작</button>
-            <button type="submit" class="btn btn-danger">인증 종료</button> <br>
+            <div class="card col-sm-5 bg-light text-center" style="height: 180px;">
+                <div class="card-body" style="display: flex;">
+                    <h6 id="verify-status-message" style="margin: auto;">인증시작 버튼을 눌러주세요</h6>
+                </div>
+            </div>
+            <br>
+            <button type="button" id="verify-button" class="btn btn-warning">인증 시작</button>
+            <button id="end-verify-button" class="btn btn-danger">인증 종료</button> <br>
             <small id="seconds-left-verify" class="text-danger">Seconds</small> <br>
         </form>
         <br>
-        <div class="card col-sm-5 bg-light">
-            <div class="card-body">
-                <h1>결괏값</h1>
-            </div>
-          </div>
     </div>
     
     <script type="module" src="../controller.js"></script>
