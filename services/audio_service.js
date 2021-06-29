@@ -6,8 +6,12 @@ import fs from 'fs'
 import AudioRecorder from 'node-audiorecorder'
 import VVRequests from './vv_requests.js'
 import FormData from 'form-data'
+import getUserMedia from 'get-user-media-promise'
+import  MicrophoneStream from 'microphone-stream'
 //** */
 import fetch from 'node-fetch'
+const MicStream = MicrophoneStream.default
+let micStream
 
 export default class RecorderService {
     audioRecorder = null;
@@ -34,9 +38,25 @@ export default class RecorderService {
         const logger = console;
         this.audioRecorder = new AudioRecorder(options, logger);
         this.audioRecorder.start().stream().on('data', function(chunk) {
+            console.log("Working")
             vvrequests.uploadDataToStream(chunk, uuid)
         });
-        this.isRecording = true;
+        // this.isRecording = true;
+        // console.log(MicStream)
+        // micStream = new MicStream();
+
+        // getUserMedia({ video: false, audio: true })
+        // .then(function(stream) {
+        //     micStream.setStream(stream);
+        //     }).catch(function(error) {
+        //         console.log(error);
+        //     });
+        // // get Buffers (Essentially a Uint8Array DataView of the same Float32 values)
+        // micStream.on('data', function(chunk) {
+        //     // const raw = MicrophoneStream.toRaw(chunk)
+        //     // console.log(chunk)
+        //     vvrequests.uploadDataToStream(chunk, uuid)
+        // });
     }
 
     stopRecording(){

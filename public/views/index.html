@@ -20,6 +20,7 @@
             <button id="toggle-enrol" type="button" class="btn btn-secondary active">음성 등록</button>
             <button id="toggle-verify" type="button" class="btn btn-secondary">음성 인증</button>
         </div>
+        <br><small id="toggle-error" class="text-danger"></small>
     </div>
 
     <div id="enroll-box" class="container d-block">
@@ -28,7 +29,7 @@
             <div id='id-form' class='form-group row'>
                     <label class="col-sm-2 col-form-label">아이디 입력:</label>
                 <div class="col-sm-4">
-                    <input required type=text class="form-control" id="inputusername" name="username"" placeholder="아이디를 입력해주세요"> 
+                    <input required type=text class="form-control" id="input-enroll-username" name="username"" placeholder="아이디를 입력해주세요"> 
                     <small id="id-duplicate-warning" class="text-danger"></small> <br>
                 </div>
             </div>
@@ -54,8 +55,8 @@
             <div id='id-form' class='form-group row'>
                 <label class="col-sm-2 col-form-label">아이디 입력:</label>
                 <div class="col-sm-4">
-                    <input type=text class="form-control" id="input-id" placeholder="Enter your username"> 
-                    <small id="id-warning" class="text-danger">test</small> <br>
+                    <input type=text class="form-control" id="input-verify-username" placeholder="Enter your username"> 
+                    <small id="id-not-enrolled" class="text-danger"></small> <br>
                 </div>
             </div>
             <br>
@@ -66,12 +67,12 @@
             </div>
             <br>
             <button type="button" id="verify-button" class="btn btn-warning">인증 시작</button>
-            <button id="end-verify-button" class="btn btn-danger">인증 종료</button> <br>
-            <small id="seconds-left-verify" class="text-danger">Seconds</small> <br>
+            <button type="button" id="end-verify-button" class="btn btn-danger d-none">인증 종료</button> <br>
+            <!-- <small id="seconds-left-verify" class="text-danger"></small> <br> -->
         </form>
         <br>
     </div>
-    
-    <script type="module" src="../controller.js"></script>
+    <script type='text/javascript' src="../javascripts/bundle.js"></script>
+    <!-- <script type="text/javascript" src="../javascripts/controller.js"></script> -->
 </body>
 </html>
