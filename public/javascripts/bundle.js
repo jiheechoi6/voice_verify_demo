@@ -86,16 +86,8 @@ Recorder.forceDownload = function(blob, filename){
 module.exports = Recorder;
 
 },{}],2:[function(require,module,exports){
-require('./lib-minified/WebAudioRecorder.min');
-// require('./lib-minified/WebAudioRecorderMp3.min');
-// require('./lib-minified/Mp3LameEncoder.min.js.mem');
-module.exports = WebAudioRecorder;
-},{"./lib-minified/WebAudioRecorder.min":3}],3:[function(require,module,exports){
-(function(n){var e=function(){var i=arguments[0],t=[].slice.call(arguments,1);for(var n=0;n<t.length;++n){var r=t[n];for(key in r){var o=r[key];i[key]=typeof o==="object"?e(typeof i[key]==="object"?i[key]:{},o):o}}return i};var o={wav:"WebAudioRecorderWav.min.js",ogg:"WebAudioRecorderOgg.min.js",mp3:"WebAudioRecorderMp3.min.js"};var t={workerDir:"/",numChannels:2,encoding:"wav",options:{timeLimit:300,encodeAfterRecord:false,progressInterval:1e3,bufferSize:undefined,wav:{mimeType:"audio/wav"},ogg:{mimeType:"audio/ogg",quality:.5},mp3:{mimeType:"audio/mpeg",bitRate:160}}};var i=function(i,n){e(this,t,n||{});this.context=i.context;if(this.context.createScriptProcessor==null)this.context.createScriptProcessor=this.context.createJavaScriptNode;this.input=this.context.createGain();i.connect(this.input);this.buffer=[];this.initWorker()};e(i.prototype,{isRecording:function(){return this.processor!=null},setEncoding:function(e){if(this.isRecording())this.error("setEncoding: cannot set encoding during recording");else if(this.encoding!==e){this.encoding=e;this.initWorker()}},setOptions:function(i){if(this.isRecording())this.error("setOptions: cannot set options during recording");else{e(this.options,i);this.worker.postMessage({command:"options",options:this.options})}},startRecording:function(){if(this.isRecording())this.error("startRecording: previous recording is running");else{var i=this.numChannels,e=this.buffer,n=this.worker;this.processor=this.context.createScriptProcessor(this.options.bufferSize,this.numChannels,this.numChannels);this.input.connect(this.processor);this.processor.connect(this.context.destination);this.processor.onaudioprocess=function(t){for(var o=0;o<i;++o)e[o]=t.inputBuffer.getChannelData(o);n.postMessage({command:"record",buffer:e})};this.worker.postMessage({command:"start",bufferSize:this.processor.bufferSize});this.startTime=Date.now()}},recordingTime:function(){return this.isRecording()?(Date.now()-this.startTime)*.001:null},cancelRecording:function(){if(this.isRecording()){this.input.disconnect();this.processor.disconnect();delete this.processor;this.worker.postMessage({command:"cancel"})}else this.error("cancelRecording: no recording is running")},finishRecording:function(){if(this.isRecording()){this.input.disconnect();this.processor.disconnect();delete this.processor;this.worker.postMessage({command:"finish"})}else this.error("finishRecording: no recording is running")},cancelEncoding:function(){if(this.options.encodeAfterRecord)if(this.isRecording())this.error("cancelEncoding: recording is not finished");else{this.onEncodingCanceled(this);this.initWorker()}else this.error("cancelEncoding: invalid method call")},initWorker:function(){if(this.worker!=null)this.worker.terminate();this.onEncoderLoading(this,this.encoding);this.worker=new Worker(this.workerDir+o[this.encoding]);var e=this;this.worker.onmessage=function(n){var i=n.data;switch(i.command){case"loaded":e.onEncoderLoaded(e,e.encoding);break;case"timeout":e.onTimeout(e);break;case"progress":e.onEncodingProgress(e,i.progress);break;case"complete":e.onComplete(e,i.blob);break;case"error":e.error(i.message)}};this.worker.postMessage({command:"init",config:{sampleRate:this.context.sampleRate,numChannels:this.numChannels},options:this.options})},error:function(e){this.onError(this,"WebAudioRecorder.min.js:"+e)},onEncoderLoading:function(e,i){},onEncoderLoaded:function(e,i){},onTimeout:function(e){e.finishRecording()},onEncodingProgress:function(e,i){},onEncodingCanceled:function(e){},onComplete:function(e,i){e.onError(e,"WebAudioRecorder.min.js: You must override .onComplete event")},onError:function(i,e){console.log(e)}});n.WebAudioRecorder=i})(window);
-
-},{}],4:[function(require,module,exports){
 const Recorder = require('recorderjs')
-require('web-audio-recorder-js')
+const ServerRequests = require('./server_requests')
 
 const toggleError = document.getElementById("toggle-error")
 const toggleEnrol = document.getElementById("toggle-enrol");
@@ -105,6 +97,7 @@ const cancelEnrolButton = document.getElementById("cancel-enrol-button")
 const enrolProgressBar = document.getElementById("enrol-progress-bar")
 const secondsEnrol = document.getElementById("seconds-left-enrol")
 const duplicateIDWarning = document.getElementById("id-duplicate-warning")
+const enrollUsernameInput = document.getElementById("input-enroll-username")
 
 const toggleVerify = document.getElementById("toggle-verify");
 const verifyBox = document.getElementById("verify-box")
@@ -113,74 +106,88 @@ const endVerifyButton = document.getElementById("end-verify-button")
 const verifyStatusMessage = document.getElementById("verify-status-message")
 const usernameNotEnrolled = document.getElementById("id-not-enrolled")
 
-let isRecording = false;
+const REC_DURATION = 1000;
+const serverRequests = new ServerRequests()
+
+let isEnrolling = false;
+let isVerifying = false;
 let intervalID;
 let audioIntervalID;
-let recordingDuration = 1000;
 let gumstream;
 let rec
-// ler recorders 
 let cur_uuid
 
 //========= Enroll ==========//
 enrolButton.onclick = async function onEnrollButtonClick(){
-    let username = document.getElementById("input-enroll-username").value
+    let username = enrollUsernameInput.value
     // check if username input is empty
     if(username == "" || username == undefined){
         flashMessage(duplicateIDWarning, "아이디를 입력해주세요", true, 2000)
         return
     }
-    isRecording = true;
-    
-    createStream().then(uuid => {
-        cur_uuid = uuid
-        startRecording("enroll")
-    })
+    isEnrolling = true;
+
+   startProcess("enroll")
 }
 
-let repeatEnrolRequest = () => {
-    let username = document.getElementById("input-enroll-username").value
-    // repeat every second
-    window.fetch('/httpstream_demo/enroll', {
-        method: 'POST',
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({"username": username})
-    }).then(res => {
-        if(res.status == 411){  // voiceprint not enough. consider it as ongoing process
-            enrolButton.classList.add("d-none")
-            cancelEnrolButton.classList.remove("d-none")
-            return res.json()
-        }else if(res.status == 201){  // enroll successful. stop
-            cancelEnrolButton.classList.add("d-none")
-            enrolButton.classList.remove("d-none")
-            // reset progress bar
-            enrolProgressBar.style.setProperty("width", "0")  
-            // change progress message to success message
-            flashMessage(secondsEnrol, username + "님의 성문이 등록되었습니다!", false)
-        }else if(res.status == 409){
-            flashMessage(duplicateIDWarning, "해당 아이디의 유저가 이미 존재합니다", true)
+/** task = {"enroll", "verify"} */
+let startProcess = (task) => {
+    try{
+        serverRequests.createStream().then(uuid => {
+            cur_uuid = uuid
+        })
+        startRecording()
+        audioIntervalID = setInterval(uploadIntervalRecording, REC_DURATION)  // start repeat upload data
+        if(task == "enroll"){
+            repeatEnrollRequest()  // start repeat enroll request
         }else{
-            console.log("something went wrong internally")
+            repeatVerifyRequest()
         }
-        if(res.status != 411){
-            stopRecording()
-        }
-    }).then(res => {  
-        if(res){  // reached only when voiceprint is not enough
-            // update progress bar
-            let percent = parseFloat(res.secondsRecorded)/15*100
-            enrolProgressBar.style.setProperty("width", percent+"%")
-            // update progress message
-            secondsEnrol.innerText = "총 "+res.secondsRecorded+"초의 성문이 녹음되었습니다. 최소 15초가 필요합니다:)."
-        }
-    }).catch(e =>{
-        // activate enrol button
+    }catch(err){
+        // activate enrol/ve button
         enrolButton.classList.remove("d-none")
         cancelEnrolButton.classList.add("d-none")
-        // clearInterval(audioIntervalID)
-        // clearInterval(intervalID)
+        verifyButton.classList.remove("d-none")
+        endVerifyButton.classList.add("d-none")
         stopRecording()
-    })
+    }
+} 
+
+let repeatEnrollRequest = () => {
+    let username = document.getElementById("input-enroll-username").value
+    intervalID = setInterval(function(){
+        serverRequests.requestEnroll(username).then( result => {
+            handleEnrollRequestResult(result.code, result.secondsRecorded)
+        })
+    }, 1000)
+}
+
+/**manipulate DOM according to enrolment result*/
+let handleEnrollRequestResult = (statusCode, secondsRecorded) => {
+    if(statusCode == 411){  // voiceprint not enough. consider it as ongoing process
+        // update buttons
+        enrolButton.classList.add("d-none")
+        cancelEnrolButton.classList.remove("d-none")
+        // update progress bar
+        let percent = parseFloat(secondsRecorded)/15*100
+        enrolProgressBar.style.setProperty("width", percent+"%")
+        // update progress message
+        secondsEnrol.innerText = "총 "+secondsRecorded+"초의 성문이 녹음되었습니다. 최소 15초가 필요합니다:)."
+    }else if(statusCode == 201){  // enroll successful. stop
+        cancelEnrolButton.classList.add("d-none")
+        enrolButton.classList.remove("d-none")
+        // reset progress bar
+        enrolProgressBar.style.setProperty("width", "0")  
+        // change progress message to success message
+        flashMessage(secondsEnrol, username + "님의 성문이 등록되었습니다!", false)
+    }else if(statusCode == 409){
+        flashMessage(duplicateIDWarning, "해당 아이디의 유저가 이미 존재합니다", true)
+    }else{
+        console.log("something went wrong internally")
+    }
+    if(statusCode != 411){
+        stopRecording()
+    }
 }
 
 cancelEnrolButton.onclick = function onCancelEnroll(){
@@ -199,51 +206,37 @@ verifyButton.onclick = function onVerify(){
         flashMessage(usernameNotEnrolled, "아이디를 입력해주세요", true, 2000)
         return
     }
-    isRecording = true;
-    createStream().then( uuid => {
-        cur_uuid = uuid
-        startRecording("verify")
-    })
+    isVerifying = true;
+    
+    startProcess("verify")
+}
+
+let handleVerifyRequestResult = (code, secondsRecorded, result) => {
+    if(code == 411){  // voiceprint not enough. consider it as ongoing process
+        verifyButton.classList.add("d-none")
+        endVerifyButton.classList.remove("d-none")
+        verifyStatusMessage.innerText = "총 "+secondsRecorded+"초의 성문이 녹음되었습니다. 최소 3초가 필요합니다:)"
+    }else if(code == 200){  // verification successful
+        displayVerifyResult(verifyStatusMessage, result)
+    }else if(code == 404){
+        flashMessage(usernameNotEnrolled, "등록된 해당 아이디의 유저가 없습니다", true)
+    }else{
+        console.log("something went wrong internally")
+    }
+    if(code != 411 && code != 200){
+        stopRecording()
+    }
 }
 
 let repeatVerifyRequest = () => {
+    console.log("reached")
     let username = document.getElementById("input-verify-username").value
-    // repeat every second
-    window.fetch('/httpstream_demo/verify', {
-        method: 'POST',
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({"username": username})
-    }).then(res => {
-        if(res.status == 411){  // voiceprint not enough. consider it as ongoing process
-            verifyButton.classList.add("d-none")
-            endVerifyButton.classList.remove("d-none")
-            return res.json()
-        }else if(res.status == 200){  // verification successful
-            return res.json() // return for parsing result
-        }else if(res.status == 404){
-            flashMessage(usernameNotEnrolled, "등록된 해당 아이디의 유저가 없습니다", true)
-        }else{
-            console.log("something went wrong internally")
-        }
-        if(res.status != 411 && res.status != 200){
-            stopRecording()
-        }
-    }).then(res => {  
-        if(res){  // reached when voiceprint is not enough or if verification was successful
-            if(res.secondsRecorded != undefined){  // voiceprint not enough
-                verifyStatusMessage.innerText = "총 "+res.secondsRecorded+"초의 성문이 녹음되었습니다. 최소 3초가 필요합니다:)"
-            }else{  // result returned
-                let result = res.result
-                displayVerifyResult(verifyStatusMessage, result)
-            }
-        }
-    }).catch(e =>{
-        // activate verify button
-        verifyButton.classList.remove("d-none")
-        endVerifyButton.classList.add("d-none")
-        // clearInterval(intervalID)
-        stopRecording()
-    })
+    intervalID = setInterval(function(){
+        serverRequests.requestVerify(username).then( res => {
+            console.log(res)
+            handleVerifyRequestResult(res.code, res.secondsRecorded, res.result)
+        })
+    }, 1000)
 }
 
 endVerifyButton.onclick = function endVerify(){
@@ -257,7 +250,7 @@ endVerifyButton.onclick = function endVerify(){
 //============= Toggle =============//
 
 toggleEnrol.onclick = function onEnrolToggle(){
-    if(isRecording){
+    if(isVerifying){
         flashMessage(toggleError, "인증 진행중입니다. 종료후 이용해주세요", true, 2000)
         return
     }
@@ -271,7 +264,7 @@ toggleEnrol.onclick = function onEnrolToggle(){
 }
 
 toggleVerify.onclick = function onVerifyToggle(){
-    if(isRecording){
+    if(isEnrolling){
         flashMessage(toggleError, "등록 진행중입니다. 종료후 이용해주세요", true, 2000)
         return
     }
@@ -318,31 +311,19 @@ document.getElementById("input-enroll-username").addEventListener("keyup", funct
             rec = new Recorder(input,{numChannels:1})
 
             rec.record()
-            audioIntervalID = setInterval(uploadIntervalRecording, recordingDuration)
-            
-            if(task == "enroll"){
-                repeatEnrolRequest()
-                intervalID = setInterval(repeatEnrolRequest, 1000)
-            }else{
-                repeatVerifyRequest()
-                intervalID = setInterval(repeatVerifyRequest, 500)
-            }
         })
       }
 }
 
-// creates stream and returns uuid
-let createStream = () => {
-    console.log("========")
-    return window.fetch("/httpstream_demo/create_stream", {
-        method: 'POST',
-        headers: {'accept': 'application/json', "Content-Type": "application/json"}
-    }).then( res => res.json())
-    .then(res => {return res.uuid})
-    .catch(err => {
-        stopRecording()
-        console.log(err)
-    })
+let stopRecording = () => {
+    clearInterval(intervalID)
+    clearInterval(audioIntervalID)
+    isEnrolling = false
+    isVerifying = false
+    if(rec){
+        rec.stop()
+    }
+    gumstream.getAudioTracks()[0].stop();
 }
 
 let uploadIntervalRecording = () => {
@@ -351,6 +332,14 @@ let uploadIntervalRecording = () => {
 }
 
 let uploadWavToStream = (blob) => {
+    // let url = URL.createObjectURL(blob)
+    // let a = document.createElement("a")
+    // document.body.appendChild(a)
+    // a.style = "display: none";
+    // a.href = url;
+    // a.download = "test.wav";
+    // a.click(); 
+
     blob.arrayBuffer().then( buf =>{
         let int16 = new Int16Array(buf)
         let arr = Array.from(int16)
@@ -359,37 +348,12 @@ let uploadWavToStream = (blob) => {
         let firstHalf = arr.slice(0, mid)
         let secondHalf = arr.slice(-mid)
 
-        window.fetch('/httpstream_demo/upload_data_to_stream', {
-            method: 'POST',
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({"data": firstHalf, "uuid": cur_uuid})
-        }).then(response => response.status)
-        .catch(err => {
-            console.log(err)
-        })
-        window.fetch('/httpstream_demo/upload_data_to_stream', {
-            method: 'POST',
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({"data": secondHalf, "uuid": cur_uuid})
-        }).then(response => response.status)
-        .catch(err => {
-            console.log(err)
-        })
+        serverRequests.uploadDataToStream(firstHalf, cur_uuid)
+        serverRequests.uploadDataToStream(secondHalf, cur_uuid)
     })
-	rec.clear()
 }
 
-let stopRecording = () => {
-    clearInterval(intervalID)
-    clearInterval(audioIntervalID)
-    isRecording = false
-    if(rec){
-        rec.stop()
-    }
-    gumstream.getAudioTracks()[0].stop();
-}
-
-//==================== DOM Helper Methods ====================//
+//==================== General DOM Helper Methods ====================//
 
 let flashMessage = ( container, message, isWarning, duration=10000 ) => {
     container.innerText = message
@@ -413,4 +377,68 @@ let displayVerifyResult = (container, result) => {
         container.classList.add("text-warning")
     }
 }
-},{"recorderjs":1,"web-audio-recorder-js":2}]},{},[4]);
+},{"./server_requests":3,"recorderjs":1}],3:[function(require,module,exports){
+class VVRequests {
+    /**Make enroll request, parse result and return status code, message */
+    requestEnroll = (username) => {
+        let code
+        return window.fetch('/httpstream_demo/enroll', {
+            method: 'POST',
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({"username": username})
+        }).then( res => {
+            code = res.status
+            return res.json()
+        }).then( res => {
+            let seconds = 0
+            if( res.secondsRecorded != undefined ){
+                seconds = res.secondsRecorded
+            }
+            return { "code": code, "secondsRecorded": seconds }
+        })
+    }
+
+    requestVerify = (username) => {
+        let code
+        return window.fetch('/httpstream_demo/verify', {
+            method: 'POST',
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({"username": username})
+        }).then( res => {
+            code = res.status
+            return res.json()
+        }).then( res => {
+            let seconds = 0
+            let result = false
+            if( res.secondsRecorded != undefined ){
+                seconds = res.secondsRecorded
+            }
+            if( res.result != undefined ){
+                result = res.result
+            }
+            return { "code": code, "secondsRecorded": seconds, "result": result }
+        })
+    }
+    
+    /** Creates stream and returns uuid */
+    createStream = () => {
+        return window.fetch("/httpstream_demo/create_stream", {
+            method: 'POST',
+            headers: {'accept': 'application/json', "Content-Type": "application/json"}
+        }).then( res => res.json())
+        .then(res => {return res.uuid})
+    }
+
+    uploadDataToStream = (data, uuid) => {
+        window.fetch('/httpstream_demo/upload_data_to_stream', {
+            method: 'POST',
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({"data": data, "uuid": uuid})
+        }).catch(err => {
+            console.log(err)
+        })
+    }
+}
+
+module.exports = VVRequests
+},{}]},{},[2]);

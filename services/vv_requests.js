@@ -9,10 +9,6 @@ export default class VVRequests {
     remaining_seconds = 15
     isStreamCreated = false
 
-    constructor() {
-        // this.create = this.create.bind(this);
-    }
-
     createStream = ()=>{
         let http_path =  this._base_path + "stream/http"
         return fetch(http_path, {
@@ -52,6 +48,8 @@ export default class VVRequests {
     requestEnroll = (username) => {
         let http_path = this._base_path + 'enroll'
         let obj = this
+        console.log(username)
+        console.log(obj.current_stream)
 
         return fetch(http_path, {
             method: 'POST',

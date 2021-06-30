@@ -1,13 +1,8 @@
 import express from 'express'
 import VVRequests from '../services/vv_requests.js'
-import RecorderService from '../services/audio_service.js'
 // import User from '../models/user.js'
-import multer from 'multer'
 const router = express.Router()
-const recorderService = new RecorderService()
 const vv_request = new VVRequests()
-
-let upload = multer()
 
 router.get('/', (req, res) => {
     res.sendFile('/Users/christinechoi/solugate/voice_verify_demo/public/views/index.html')
@@ -82,37 +77,10 @@ router.post('/create_stream', (req, res) => {
 
 router.post('/upload_data_to_stream', (req, res) => {
     let buf = Buffer.from(new Int16Array(req.body.data))
-    console.log(buf)
 
     vv_request.uploadDataToStream(buf, req.body.uuid)
     //TODO: customize status
     res.sendStatus(200)
-})
-
-router.post('/start_recording', (req, res) => {
-    // start recorder, start stream, upload stream
-    vv_request.createStream().then(uuid => {
-        recorderService.startRecording(uuid)
-        // vv_requests.isRecording = true;
-        res.sendStatus(200)
-    }).catch((e)=>{
-        console.log(e)
-        res.status(400).send(e)
-    })
-})
-
-router.post('/stop_recording', (req, res) => {
-    // stop recorder
-    try{
-        console.log("stopping recording")
-        recorderService.stopRecording();
-        vv_request.isRecording = false;
-        res.sendStatus(200)
-        res.end()
-    }catch(e){
-        console.log(e)
-        res.sendStatus(500)
-    }
 })
 
 export {router as httpStreamRoutes}
