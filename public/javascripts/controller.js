@@ -1,9 +1,4 @@
-const MicrophoneStream = require("microphone-stream").default
-const toWav = require("audiobuffer-to-wav")
-const WavEncoder = require("wav-encoder")
-const fs = require('fs');
 const Recorder = require('recorderjs')
-// const WebAudioRecorder = require('web-audio-recorder-js')
 require('web-audio-recorder-js')
 
 const toggleError = document.getElementById("toggle-error")
@@ -14,6 +9,7 @@ const cancelEnrolButton = document.getElementById("cancel-enrol-button")
 const enrolProgressBar = document.getElementById("enrol-progress-bar")
 const secondsEnrol = document.getElementById("seconds-left-enrol")
 const duplicateIDWarning = document.getElementById("id-duplicate-warning")
+const enrollUsernameInput = document.getElementById("input-enroll-username")
 
 const toggleVerify = document.getElementById("toggle-verify");
 const verifyBox = document.getElementById("verify-box")
@@ -22,96 +18,35 @@ const endVerifyButton = document.getElementById("end-verify-button")
 const verifyStatusMessage = document.getElementById("verify-status-message")
 const usernameNotEnrolled = document.getElementById("id-not-enrolled")
 
+const REC_DURATION = 1000;
+
 let isRecording = false;
 let intervalID;
 let audioIntervalID;
-let recordingDuration = 1000;
 let gumstream;
 let rec
+let intervalIDs = {}
+let audioIntervalIDs = {}
+let gumstreams = {}  // needed later to stop browser audio access
+let recorders = {}
+let uuids = {}
 let cur_uuid
 
-//========= Enrol ==========//
+//========= Enroll ==========//
 enrolButton.onclick = async function onEnrollButtonClick(){
-    let username = document.getElementById("input-enroll-username").value
+    let username = enrollUsernameInput.value
+    // check if username input is empty
     if(username == "" || username == undefined){
         flashMessage(duplicateIDWarning, "아이디를 입력해주세요", true, 2000)
+        return
     }
     isRecording = true;
-    await startRecording("enroll")
-}
-
-let startRecording = (task) => {
-    if (navigator.mediaDevices) {
-        var constraints = { audio: { sampleSize: 16, channelCount: 1, sampleRate: 16000 } , video: false };
-      
-        navigator.mediaDevices.getUserMedia(constraints)
-        .then(async function(stream) {
-            let audioCtx = new AudioContext({sampleRate: 16000})
-            
-            gumstream = stream
-            input = audioCtx.createMediaStreamSource(stream);
-            rec = new Recorder(input,{numChannels:1})
-
-            createStream().then( uuid => {
-                cur_uuid = uuid
-                rec.record()
-                audioIntervalID = setInterval(uploadIntervalRecording, recordingDuration)
-                
-                if(task == "enroll"){
-                    repeatEnrolRequest()
-                    intervalID = setInterval(repeatEnrolRequest, 1000)
-                }else{
-                    repeatVerifyRequest()
-                    intervalID = setInterval(repeatVerifyRequest, 500)
-                }
-            })
-        })
-      }
-}
-
-// creates stream and returns uuid
-let createStream = () => {
-    return window.fetch("/httpstream_demo/create_stream", {
-        method: 'POST',
-        headers: {'accept': 'application/json', "Content-Type": "application/json"}
-    }).then( res => res.json())
-    .then(res => {return res.uuid})
-}
-
-let uploadIntervalRecording = () => {
-    rec.exportWAV(uploadWavToStream)
-    rec.clear()
-}
-
-let uploadWavToStream = (blob) => {
-    blob.arrayBuffer().then( buf =>{
-        console.log(buf)
-        let int16 = new Int16Array(buf)
-        let arr = Array.from(int16)
-
-        let mid = Math.ceil(arr.length/2)
-        let firstHalf = arr.slice(0, mid)
-        let secondHalf = arr.slice(-mid)
-
-        window.fetch('/httpstream_demo/upload_data_to_stream', {
-            method: 'POST',
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({"data": firstHalf, "uuid": cur_uuid})
-            // body: fd
-        }).then(response => response.status)
-        .catch(err => {
-            console.log(err)
-        })
-        window.fetch('/httpstream_demo/upload_data_to_stream', {
-            method: 'POST',
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({"data": secondHalf, "uuid": cur_uuid})
-        }).then(response => response.status)
-        .catch(err => {
-            console.log(err)
-        })
+    
+    createStream().then(uuid => {
+        cur_uuid = uuid
+        // uuids[username] = uuid
+        startRecording("enroll")
     })
-	rec.clear()
 }
 
 let repeatEnrolRequest = () => {
@@ -122,7 +57,6 @@ let repeatEnrolRequest = () => {
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({"username": username})
     }).then(res => {
-        console.log(res.status)
         if(res.status == 411){  // voiceprint not enough. consider it as ongoing process
             enrolButton.classList.add("d-none")
             cancelEnrolButton.classList.remove("d-none")
@@ -154,8 +88,7 @@ let repeatEnrolRequest = () => {
         // activate enrol button
         enrolButton.classList.remove("d-none")
         cancelEnrolButton.classList.add("d-none")
-        // clearInterval(audioIntervalID)
-        // clearInterval(intervalID)
+
         stopRecording()
     })
 }
@@ -166,17 +99,6 @@ cancelEnrolButton.onclick = function onCancelEnroll(){
     enrolButton.classList.remove("d-none")
     // stop repeating enrol request 
     stopRecording()
-
-    rec.exportWAV(function(blob){
-        let url = URL.createObjectURL(blob)
-        let a = document.createElement("a")
-        document.body.appendChild(a)
-        a.style = "display: none";
-        a.href = url;
-        a.download = "test.wav";
-        a.click(); 
-        window.URL.revokeObjectURL(url);
-    })
 }
 
 //========= Verify ==========//
@@ -188,7 +110,10 @@ verifyButton.onclick = function onVerify(){
         return
     }
     isRecording = true;
-    startRecording("verify")
+    createStream().then( uuid => {
+        cur_uuid = uuid
+        startRecording("verify")
+    })
 }
 
 let repeatVerifyRequest = () => {
@@ -211,9 +136,6 @@ let repeatVerifyRequest = () => {
             console.log("something went wrong internally")
         }
         if(res.status != 411 && res.status != 200){
-            // isRecording = false
-            // clearInterval(intervalID)
-            // clearInterval(audioIntervalID)
             stopRecording()
         }
     }).then(res => {  
@@ -288,13 +210,82 @@ document.getElementById("input-enroll-username").addEventListener("keyup", funct
 //==================== Helper methods =====================//
 //=========================================================//
 
-let flashMessage = ( container, message, isWarning, duration=10000 ) => {
-    container.innerText = message
-    if(!isWarning) secondsEnrol.classList.add("text-success")
-    setTimeout(function(){
-        container.innerText = ""
-        container.classList.remove("text-success")
-    }, duration)
+
+//==================== Recorder Helper methods =================//
+/**
+ * @param {string} task - {"enroll", "verify"}
+ */
+ let startRecording = (task) => {
+    if (navigator.mediaDevices) {
+        var constraints = { audio: { sampleSize: 16, channelCount: 1, sampleRate: 16000 } , video: false };
+      
+        navigator.mediaDevices.getUserMedia(constraints)
+        .then(async function(stream) {
+            let audioCtx = new AudioContext({sampleRate: 16000})
+            
+            gumstream = stream
+            input = audioCtx.createMediaStreamSource(stream);
+            rec = new Recorder(input,{numChannels:1})
+
+            rec.record()
+            audioIntervalID = setInterval(uploadIntervalRecording, REC_DURATION)
+            
+            if(task == "enroll"){
+                repeatEnrolRequest()
+                intervalID = setInterval(repeatEnrolRequest, 1000)
+            }else{
+                repeatVerifyRequest()
+                intervalID = setInterval(repeatVerifyRequest, 500)
+            }
+        })
+      }
+}
+
+// creates stream and returns uuid
+let createStream = () => {
+    console.log("========")
+    return window.fetch("/httpstream_demo/create_stream", {
+        method: 'POST',
+        headers: {'accept': 'application/json', "Content-Type": "application/json"}
+    }).then( res => res.json())
+    .then(res => {return res.uuid})
+    .catch(err => {
+        stopRecording()
+        console.log(err)
+    })
+}
+
+let uploadIntervalRecording = () => {
+    rec.exportWAV(uploadWavToStream)
+    rec.clear()
+}
+
+let uploadWavToStream = (blob) => {
+    blob.arrayBuffer().then( buf =>{
+        let int16 = new Int16Array(buf)
+        let arr = Array.from(int16)
+
+        let mid = Math.ceil(arr.length/2)
+        let firstHalf = arr.slice(0, mid)
+        let secondHalf = arr.slice(-mid)
+
+        window.fetch('/httpstream_demo/upload_data_to_stream', {
+            method: 'POST',
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({"data": firstHalf, "uuid": cur_uuid})
+        }).then(response => response.status)
+        .catch(err => {
+            console.log(err)
+        })
+        window.fetch('/httpstream_demo/upload_data_to_stream', {
+            method: 'POST',
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({"data": secondHalf, "uuid": cur_uuid})
+        }).then(response => response.status)
+        .catch(err => {
+            console.log(err)
+        })
+    })
 }
 
 let stopRecording = () => {
@@ -304,9 +295,18 @@ let stopRecording = () => {
     if(rec){
         rec.stop()
     }
-    console.log(gumstream.getAudioTracks()[0])
-
     gumstream.getAudioTracks()[0].stop();
+}
+
+//==================== DOM Helper Methods ====================//
+
+let flashMessage = ( container, message, isWarning, duration=10000 ) => {
+    container.innerText = message
+    if(!isWarning) secondsEnrol.classList.add("text-success")
+    setTimeout(function(){
+        container.innerText = ""
+        container.classList.remove("text-success")
+    }, duration)
 }
 
 let displayVerifyResult = (container, result) => {

@@ -75,34 +75,15 @@ router.post('/verify', (req, res) => {
 router.post('/create_stream', (req, res) => {
     vv_request.createStream().then( uuid => {
         res.status(200).send({uuid:uuid})
+    }).catch(err => {
+        res.status(500).send({message: "Internal Server Errors"})
     })
 })
 
-// let mid = upload.fields([{
-//     name: 'data', maxCount: 1}, {
-//     name: '', maxCount: 1
-//   }])
 router.post('/upload_data_to_stream', (req, res) => {
-    // console.log(req.body.data)
-    // let int8 = Uint8Array.from(req.body.data);
-    // let int16 = new Int16Array(int8.buffer)
-    // let int16test = new Int16Array(int8.buffer, int8.byteOffset, int8.byteLength/int16.BYTES_PER_ELEMENT)
-    // let buf = Buffer.from(int16)
-    // let lebuf = Buffer.alloc(int16.length)
-    // console.log(int8)
-    // console.log(int16)
-    // console.log(int16test)
-    // console.log(buf)
-    // console.log(req.body.uuid)
-
     let buf = Buffer.from(new Int16Array(req.body.data))
     console.log(buf)
-    // console.log(req.body.uuid)
 
-    // for(let i=0; i<int16.length-1; i++){
-    //     lebuf.writeInt16LE(int16[i], i)
-    // }
-    // console.log(lebuf)
     vv_request.uploadDataToStream(buf, req.body.uuid)
     //TODO: customize status
     res.sendStatus(200)
