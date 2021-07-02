@@ -1,5 +1,7 @@
 const Recorder = require('recorderjs')
 const ServerRequests = require('./server_requests')
+const Wave = require("@foobar404/wave");
+const { request } = require('http');
 
 const toggleError = document.getElementById("toggle-error")
 const toggleEnrol = document.getElementById("toggle-enrol");
@@ -18,7 +20,9 @@ const endVerifyButton = document.getElementById("end-verify-button")
 const verifyStatusMessage = document.getElementById("verify-status-message")
 const usernameNotEnrolled = document.getElementById("id-not-enrolled")
 
-const REC_DURATION = 1000;
+const userList = document.getElementById('user-list')
+
+const REC_DURATION = 500;
 const serverRequests = new ServerRequests()
 
 let isEnrolling = false;
@@ -28,6 +32,59 @@ let audioIntervalID;
 let gumstream;
 let rec
 let cur_uuid
+let recorded_count  // keep track of the number of bytes recorded
+let users = []
+
+// Prep user data for list display 
+window.addEventListener('load', (event) => {
+    serverRequests.getAllUsers().then( data => {
+        data.users.forEach( user => {
+            // console.log(user)
+            users.push(user.username)
+        })
+
+        displayUserList()
+    })
+})
+
+let displayUserList = () => {
+    // reset first
+    userList.innerHTML = document.getElementById('user-list-header').outerHTML
+
+    if(users.length == 0){
+        let elem = document.createElement('li')
+        elem.classList.add("list-group-item")
+        elem.classList.add("text-secondary")
+        elem.classList.add("small")
+        elem.innerText = "등록된 화자가 없습니다"
+        userList.appendChild(elem)
+    }
+    users.forEach( user => {
+        console.log(user)
+        let elem = document.createElement('li')
+        elem.classList.add("list-group-item")
+        elem.innerText = user
+        
+        // delete button for each user
+        let button = document.createElement("button")
+        button.type = "button"
+        button.classList.add("btn", "btn-outline-danger", "btn-sm")
+        button.style.setProperty("float", "right")
+        button.innerText = "삭제"
+        elem.appendChild(button)
+
+        button.onclick = (e) => {
+            let username = e.target.parentNode.textContent.slice(0,-2)
+            serverRequests.deleteUser(username).then( () => {
+                serverRequests.getAllUsers().then(data => console.log(data.users))
+            })
+            console.log(e.target.parentNode)
+            e.target.parentNode.remove()
+        }
+
+        userList.appendChild(elem)
+    })
+}
 
 //========= Enroll ==========//
 enrolButton.onclick = async function onEnrollButtonClick(){
@@ -47,14 +104,14 @@ let startProcess = (task) => {
     try{
         serverRequests.createStream().then(uuid => {
             cur_uuid = uuid
+            startRecording()
+            audioIntervalID = setInterval(uploadIntervalRecording, REC_DURATION)  // start repeat upload data
+            if(task == "enroll"){
+                repeatEnrollRequest()  // start repeat enroll request
+            }else{
+                repeatVerifyRequest()
+            }
         })
-        startRecording()
-        audioIntervalID = setInterval(uploadIntervalRecording, REC_DURATION)  // start repeat upload data
-        if(task == "enroll"){
-            repeatEnrollRequest()  // start repeat enroll request
-        }else{
-            repeatVerifyRequest()
-        }
     }catch(err){
         // activate enrol/ve button
         enrolButton.classList.remove("d-none")
@@ -67,15 +124,22 @@ let startProcess = (task) => {
 
 let repeatEnrollRequest = () => {
     let username = document.getElementById("input-enroll-username").value
-    intervalID = setInterval(function(){
-        serverRequests.requestEnroll(username).then( result => {
-            handleEnrollRequestResult(result.code, result.secondsRecorded)
-        })
-    }, 1000)
+    requestEnroll(username)
+    intervalID = setInterval(function(){requestEnroll(username)}, 1000)
+}
+
+let requestEnroll = (username) => {
+    serverRequests.requestEnroll(username).then( result => {
+        console.log(result)
+        handleEnrollRequestResult(result.code, result.secondsRecorded)
+    })
 }
 
 /**manipulate DOM according to enrolment result*/
 let handleEnrollRequestResult = (statusCode, secondsRecorded) => {
+    console.log(statusCode)
+    duplicateIDWarning.innerText = ""  // reset warning message first
+    let username = enrollUsernameInput.value
     if(statusCode == 411){  // voiceprint not enough. consider it as ongoing process
         // update buttons
         enrolButton.classList.add("d-none")
@@ -92,17 +156,26 @@ let handleEnrollRequestResult = (statusCode, secondsRecorded) => {
         enrolProgressBar.style.setProperty("width", "0")  
         // change progress message to success message
         flashMessage(secondsEnrol, username + "님의 성문이 등록되었습니다!", false)
+        if(!users.includes(username))  users.push(username)
+        displayUserList()
+        downloadWav()
     }else if(statusCode == 409){
         flashMessage(duplicateIDWarning, "해당 아이디의 유저가 이미 존재합니다", true)
     }else{
+        cancelEnrolButton.classList.add("d-none")
+        enrolButton.classList.remove("d-none")
+        enrolProgressBar.style.setProperty("width", "0")  
         console.log("something went wrong internally")
     }
     if(statusCode != 411){
+        console.log("stop")
         stopRecording()
     }
 }
 
 cancelEnrolButton.onclick = function onCancelEnroll(){
+    downloadWav()
+
     // change buttons
     cancelEnrolButton.classList.add("d-none")
     enrolButton.classList.remove("d-none")
@@ -128,6 +201,7 @@ let handleVerifyRequestResult = (code, secondsRecorded, result) => {
         verifyButton.classList.add("d-none")
         endVerifyButton.classList.remove("d-none")
         verifyStatusMessage.innerText = "총 "+secondsRecorded+"초의 성문이 녹음되었습니다. 최소 3초가 필요합니다:)"
+        verifyStatusMessage.style.setProperty("color", "black")
     }else if(code == 200){  // verification successful
         displayVerifyResult(verifyStatusMessage, result)
     }else if(code == 404){
@@ -141,14 +215,15 @@ let handleVerifyRequestResult = (code, secondsRecorded, result) => {
 }
 
 let repeatVerifyRequest = () => {
-    console.log("reached")
     let username = document.getElementById("input-verify-username").value
-    intervalID = setInterval(function(){
-        serverRequests.requestVerify(username).then( res => {
-            console.log(res)
-            handleVerifyRequestResult(res.code, res.secondsRecorded, res.result)
-        })
-    }, 1000)
+    requestVerify(username)
+    intervalID = setInterval(function(){requestVerify(username)}, 1000)
+}
+
+let requestVerify = (username) => {
+    serverRequests.requestVerify(username).then( res => {
+        handleVerifyRequestResult(res.code, res.secondsRecorded, res.result)
+    })
 }
 
 endVerifyButton.onclick = function endVerify(){
@@ -156,6 +231,7 @@ endVerifyButton.onclick = function endVerify(){
     verifyStatusMessage.style.setProperty("color", "black")
     endVerifyButton.classList.add("d-none")
     verifyButton.classList.remove("d-none")
+    downloadWav()
     stopRecording()
 }
 
@@ -213,15 +289,19 @@ document.getElementById("input-enroll-username").addEventListener("keyup", funct
  let startRecording = (task) => {
     if (navigator.mediaDevices) {
         var constraints = { audio: { sampleSize: 16, channelCount: 1, sampleRate: 16000 } , video: false };
-      
+        
         navigator.mediaDevices.getUserMedia(constraints)
-        .then(async function(stream) {
+        .then(function(stream) {
             let audioCtx = new AudioContext({sampleRate: 16000})
-            
+            var frameCount = audioCtx.sampleRate * 2.0;
+            var myArrayBuffer = audioCtx.createBuffer(2, frameCount, audioCtx.sampleRate);
+            var nowBuffering = myArrayBuffer.getChannelData(1);
+            console.log(nowBuffering)
+
             gumstream = stream
             input = audioCtx.createMediaStreamSource(stream);
             rec = new Recorder(input,{numChannels:1})
-
+            
             rec.record()
         })
       }
@@ -234,13 +314,13 @@ let stopRecording = () => {
     isVerifying = false
     if(rec){
         rec.stop()
+        gumstream.getAudioTracks()[0].stop();
     }
-    gumstream.getAudioTracks()[0].stop();
 }
 
 let uploadIntervalRecording = () => {
     rec.exportWAV(uploadWavToStream)
-    rec.clear()
+    // rec.clear()
 }
 
 let uploadWavToStream = (blob) => {
@@ -252,16 +332,49 @@ let uploadWavToStream = (blob) => {
     // a.download = "test.wav";
     // a.click(); 
 
+
+    // console.log(blob)
+    // let reader = new FileReader()
+    // reader.readAsDataURL(blob)
+    // reader.onloadend = function(){
+    //     let base64 = reader.result.substr(recorded_count, reader.result.length)
+    //     let uint8 = new Uint8Array(base64.length)
+    //     recorded_count = reader.result.length
+    //     for(let i = 0; i< base64.length; i++){
+    //         uint8[i] = base64.charCodeAt(i)
+    //     }
+    //     let int16 = new Int16Array(uint8.buffer)
+    //     console.log(int16)
+
+    //     serverRequests.uploadDataToStream( Array.from(int16), cur_uuid )
+    // }
+
     blob.arrayBuffer().then( buf =>{
+
+
         let int16 = new Int16Array(buf)
         let arr = Array.from(int16)
+        
+        // let mid = (recorded_count+arr.length)/2  // divide in half in case arr is too large
+        // let cur_arr1 = arr.slice(recorded_count, mid)
+        // let cur_arr2 = arr.slice(mid, arr.length)
+        let sliced = arr.slice(recorded_count, arr.length)
+        console.log(arr.length-recorded_count)
+        recorded_count = arr.length
+        serverRequests.uploadDataToStream(sliced, cur_uuid)
+        // serverRequests.uploadDataToStream(cur_arr2, cur_uuid)
+    })
+}
 
-        let mid = Math.ceil(arr.length/2)
-        let firstHalf = arr.slice(0, mid)
-        let secondHalf = arr.slice(-mid)
-
-        serverRequests.uploadDataToStream(firstHalf, cur_uuid)
-        serverRequests.uploadDataToStream(secondHalf, cur_uuid)
+let downloadWav = () => {
+    rec.exportWAV(blob => {
+        let url = URL.createObjectURL(blob)
+        let a = document.createElement("a")
+        document.body.appendChild(a)
+        a.style = "display: none";
+        a.href = url;
+        a.download = "test.wav";
+        a.click(); 
     })
 }
 
@@ -279,13 +392,12 @@ let flashMessage = ( container, message, isWarning, duration=10000 ) => {
 let displayVerifyResult = (container, result) => {
     if(result == "verified"){
         container.innerText = "VERIFIED"
-        // container.classList.add("text-success")
         container.style.setProperty("color", "green")
     }else if(result == "not_verified"){
         container.innerText = "NOT VERIFIED"
-        container.classList.add("text-danger")
+        container.style.setProperty("color", "yellow")
     }else{
         container.innerText = "NOT SURE"
-        container.classList.add("text-warning")
+        container.style.setProperty("color", "red")
     }
 }

@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/jiheechoi6/voice_verify_demo#readme",
   "dependencies": {
+    "@foobar404/wave": "^1.2.7",
     "audiobuffer-to-wav": "^1.0.0",
     "body-parser": "^1.19.0",
     "browserift": "0.0.1-security",
@@ -32,7 +33,6 @@
     "http": "0.0.1-security",
     "microphone-stream": "^6.0.0",
     "mongoose": "^5.12.14",
-    "multer": "^1.4.2",
     "node-audiorecorder": "^2.2.0",
     "node-fetch": "^2.6.1",
     "recorderjs": "^1.0.1",

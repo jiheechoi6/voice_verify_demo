@@ -2,33 +2,26 @@ import express from 'express'
 import mongoose from 'mongoose'
 import {httpStreamRoutes} from './routes/httpstream_demo.js'
 import path from 'path'
-import bodyParser from 'body-parser'
 import fs from 'fs'
 import https from 'https'
 import http from 'http'
-import multer from 'multer'
-import uint8 from 'uint8'
 // let privateKey  = fs.readFileSync('sslcert/selfsigned.key', 'utf8');
 let privateKey  = fs.readFileSync('./sslcert/cert.key');
 // let certificate = fs.readFileSync('sslcert/selfsigned.crt', 'utf8');
 let certificate = fs.readFileSync('./sslcert/cert.pem');
 let credentials = {key: privateKey, cert: certificate};
-let upload = multer()
 
 const app = express()
 
-// mongoose.connect('mongodb://localhost/users', {
-//     useNewUrlParser: true, useUnifiedTopology: true
-// })
+mongoose.connect('mongodb://localhost/users', {
+    useNewUrlParser: true, useUnifiedTopology: true
+})
 
 app.use(express.static(path.join(path.resolve(path.dirname("")), '/public')))
 app.use('/lib/', express.static(path.join(path.resolve(path.dirname("")), 'node_modules/node-fetch/lib')));
+app.use(express.urlencoded({limit: '50mb'}));
+app.use(express.json({limit: '50mb'}))
 
-app.use(upload.any());
-app.use(express.urlencoded({extended: false}))
-// app.use(bodyParser.urlencoded({extended: false}))
-app.use(bodyParser.json())
-app.use(bodyParser.raw({type: "application/octet-stream"}));
 app.use('/httpstream_demo', httpStreamRoutes)
 
 let httpServer = http.createServer(app)

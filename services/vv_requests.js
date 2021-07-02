@@ -39,7 +39,7 @@ export default class VVRequests {
                 "Authorization": "Token " + this.token
             },
             body: chunk
-        }).then(response => response)
+        }).then(response => console.log(response.status))
         .catch(err => {
             console.log(err)
         })
@@ -77,6 +77,22 @@ export default class VVRequests {
             },
             body: JSON.stringify({
                 "stream_uuid": obj.current_stream,
+                "external_id": username
+            })
+        })
+    }
+
+    requestDeleteUser = (username) => {
+        let http_path =  this._base_path + "leave"
+        let obj = this;
+        return fetch(http_path, {
+            method: 'DELETE',
+            headers: {
+                'accept': 'application/json',
+                "Content-Type": "application/json",
+                "Authorization": "Token " + obj.token
+            },
+            body: JSON.stringify({
                 "external_id": username
             })
         })
